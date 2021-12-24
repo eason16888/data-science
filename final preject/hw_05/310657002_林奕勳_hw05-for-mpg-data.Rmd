@@ -1,0 +1,214 @@
+---
+title: "310657002_林奕勳_hw05-for-mpg-data"
+output: html_document
+---
+
+Code coming from  https://www.data-to-viz.com/caveat/boxplot.html
+```{r}
+library('tidyverse')
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(moments)
+library(viridis)
+```
+
+```{r}
+
+feature_name_mpg = c('mpg','cylinders','displacement','horsepower','weight','acceleration','model year','origin','car name')
+data_mpg = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\mpg\\auto-mpg.data",head=F,col.names=feature_name_mpg)
+data_mpg = data_mpg[1:8]
+
+str(data_mpg)
+
+# it is show that have 398 datas and 8 variables(mpg is label orthers is feature)
+dim(data_mpg)
+
+```
+
+## change type of data to numerice but probuct NA
+```{r}
+for (i in names(data_mpg)){
+  data_mpg[[i]]=as.numeric(data_mpg[[i]])
+}
+summary(data_mpg)
+```
+
+## find NA , and horsepower have 6 NA Missing value
+```{r}
+colSums(is.na(data_mpg))
+data_mpg[is.na(data_mpg$horsepower),]
+```
+
+## and remove missing value
+```{r}
+miss_value = which(is.na(data_mpg$horsepower)==1)
+data_mpg = data_mpg[-miss_value,]
+```
+
+our label(mpg) have not outlier 
+```{r}
+boxplot(data_mpg$mpg)
+```
+
+plot boxplot anf find that acceleration have outlier 
+```{r}
+boxplot(data_mpg$acceleration)
+```
+
+plot boxplot and find that horsepower have outlier 
+```{r}
+boxplot(data_mpg$horsepower)
+```
+find outlier of horsepower
+```{r}
+quan=quantile(data_mpg$horsepower,c(0.25,0.5,0.75))
+IQR_horsepower = quan[3]-quan[1]
+outlier_horsepower=which(data_mpg$horsepower > quan[2]+1.5*IQR_horsepower)
+data_mpg_outlier_horsepower = data_mpg[outlier_horsepower,]
+```
+
+find outlier of acceleration
+```{r}
+quan=quantile(data_mpg$acceleration,c(0.25,0.5,0.75))
+IQR_acceleration = quan[3]-quan[1]
+outlier_acceleration=which(data_mpg$acceleration > quan[2]+1.5*IQR_acceleration | data_mpg$acceleration < quan[2]-1.5*IQR_acceleration)
+data_mpg_outlier_acceleration = data_mpg[outlier_acceleration,]
+```
+
+plot scatter plot of horsepower with mpg , although have outlier but it have small mpg 
+```{r}
+plot(data_mpg$horsepower,data_mpg$mpg)
+points(x=data_mpg_outlier_horsepower$horsepower,y=data_mpg_outlier_horsepower$mpg,col='red')
+```
+plot scatter plot of acceleration with mpg , although have outlier but when the acceleration small ,the mpg  small , and when acceleration large mpg is irregular 
+```{r}
+plot(data_mpg$acceleration,data_mpg$mpg)
+points(x=data_mpg_outlier_acceleration$acceleration,y=data_mpg_outlier_acceleration$mpg,col='red')
+```
+plot scatter plot of acceleration and horsepower
+```{r}
+plot(data_mpg$acceleration,data_mpg$horsepower)
+points(x=data_mpg_outlier_acceleration$acceleration,y=data_mpg_outlier_acceleration$horsepower,col='red')
+points(x=data_mpg_outlier_horsepower$acceleration,y=data_mpg_outlier_horsepower$horsepower,col='green')
+outlier = intersect(outlier_acceleration , outlier_horsepower)
+data_mpg_pool_outlier = data_mpg[outlier,]
+points(x=data_mpg_pool_outlier$acceleration,y=data_mpg_pool_outlier$horsepower,col='cyan',pch=16)
+```
+
+plot boxplot of mpg group by cylinders , and find have outlier 
+```{r}
+data_mpg%>%
+  ggplot(aes(cylinders,mpg ,color =as.factor(data_mpg$cylinders) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+
+plot boxplot of mpg group by origin, and find have outlier 
+```{r}
+data_mpg%>%
+  ggplot(aes(origin,mpg ,color =as.factor(data_mpg$origin) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+
+```{r}
+data_mpg[['origin']]=as.character(data_mpg[['origin']])
+ggplot(data_mpg,aes(x=mpg,group=origin,col=origin,fill=origin))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+data_mpg[['origin']]=as.numeric(data_mpg[['origin']])
+```
+
+```{r}
+data_mpg[['cylinders']]=as.character(data_mpg[['cylinders']])
+ggplot(data_mpg,aes(x=mpg,group=cylinders,color=cylinders,fill=cylinders))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+data_mpg[['cylinders']]=as.numeric(data_mpg[['cylinders']])
+```
+
+
+
+
+find the displacement and weight have high association with mpg
+```{r}
+panel.cor=function(x,y,digits=2,prefix="",cex.cor=10,...)
+  {
+  usr=par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r=cor(x,y)
+  txt=format(c(r,0.123456789),digits=digits)[1]
+  txt=paste(prefix,txt,sep ="")
+  if(missing(cex.cor)) cex.cor=1/strwidth(txt)
+  text(0.5,0.5,txt,cex=cex.cor*abs(r))
+  } 
+pairs(data_mpg,lower.panel=panel.smooth,upper.panel=panel.cor)
+```
+
+check distribution for mpg , and find that it is positive skew (i.e skew to right)
+```{r}
+data_mpg%>%
+  ggplot(aes(mpg))+
+  geom_histogram(aes(y=..density..),col='black',fill='black',alpha=0.2)+
+  geom_density(alpha=0.2,fill='red')
+skewness(data_mpg$mpg)
+```
+
+and we take log for mpg and find that symmetrical distribution
+```{r}
+data_mpg['mpg'] = log(data_mpg['mpg'])
+data_mpg%>%
+  ggplot(aes(mpg))+
+  geom_histogram(aes(y=..density..),col='black',fill='black',alpha=0.2)+
+  geom_density(alpha=0.2,fill='red')
+```
+if we take log for mpg , cylinders,displacement ,horsepower and weight will have high association with mpg
+```{r}
+pairs(data_mpg,lower.panel=panel.smooth,upper.panel=panel.cor)
+```
+
+```{r}
+data_mpg%>%
+  ggplot(aes(cylinders,mpg ,color =as.factor(data_mpg$cylinders) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+compare previous boxplot the outlier are decrease
+```{r}
+data_mpg%>%
+  ggplot(aes(origin,mpg ,color =as.factor(data_mpg$origin) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+
+
+compare previous plot
+```{r}
+data_mpg[['origin']]=as.character(data_mpg[['origin']])
+ggplot(data_mpg,aes(x=mpg,group=origin,col=origin,fill=origin))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+```
+
+```{r}
+data_mpg[['cylinders']]=as.character(data_mpg[['cylinders']])
+ggplot(data_mpg,aes(x=mpg,group=cylinders,color=cylinders,fill=cylinders))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+```
+
+# Conclusion : 如果 outlier 跟趨勢差不多無需處理，如果跟趨勢有落差可以單獨拿出來探討，以此資料為例 horsepower跟mpg 成反比，若 outlier of horsepower 跟 mpg 成正比或不成反比 可以單獨討論。 
+
+
+
+
+
+
+
+
+
+
+
+

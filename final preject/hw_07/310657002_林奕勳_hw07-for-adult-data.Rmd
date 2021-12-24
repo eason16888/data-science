@@ -1,0 +1,196 @@
+---
+title: "data science hw07 for adult data"
+output: html_document
+---
+
+```{r}
+#error metrics -- Confusion Matrix
+err_metric=function(CM)
+{
+  TN =CM[1,1]
+  TP =CM[2,2]
+  FP =CM[1,2]
+  FN =CM[2,1]
+  precision =(TP)/(TP+FP)
+  recall_score =(TP)/(TP+FN)
+ 
+  f1_score=2*((precision*recall_score)/(precision+recall_score))
+  accuracy_model  =(TP+TN)/(TP+TN+FP+FN)
+  False_positive_rate =(FP)/(FP+TN)
+  False_negative_rate =(FN)/(FN+TP)
+ 
+  print(paste("Precision value of the model: ",round(precision,2)))
+  print(paste("Accuracy of the model: ",round(accuracy_model,2)))
+  print(paste("Recall value of the model: ",round(recall_score,2)))
+  print(paste("False Positive rate of the model: ",round(False_positive_rate,2)))
+ 
+  print(paste("False Negative rate of the model: ",round(False_negative_rate,2)))
+ 
+  print(paste("f1 score of the model: ",round(f1_score,2)))
+}
+```
+
+```{r}
+library('tidyverse')
+library('ggplot2')
+library(DiffXTables)
+library(lattice)
+library(caret)
+library(MLmetrics)
+library(reticulate)
+library(e1071)
+library(kknn)
+library(rpart)
+library(ROSE)
+feature_name_adult = c('AGE','WORKCLASS','FNLWGT','EDUCATION','EDUCATIONNUM','MARITALSTATUS','OCCUPATION','RELATIONSHIP','RACE','SEX','CAPITALGAIN','CAPITALLOSS','HOURSPERWEEK','NATIVECOUNTRY','ABOVE50K')
+data_adult = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\adult\\adult.data",head=F,sep = ",",col.names=feature_name_adult)
+class_variable_adult = c('WORKCLASS','EDUCATION','MARITALSTATUS','OCCUPATION','RELATIONSHIP','RACE','SEX','NATIVECOUNTRY','ABOVE50K')
+
+# str(data_adult)
+```
+
+since this data miss value is use '?' express ,so we use NA replace '?'
+```{r}
+for (i in feature_name_adult){
+    if (sum(data_adult[[i]] == ' ?')>0){
+      data_adult[data_adult[[i]] == ' ?',][[i]] =NA
+  }
+}
+
+```
+
+## 將類別資料轉成numeric型態，並從Dataframe 轉成 tibble
+```{r}
+for (i in class_variable_adult){
+  data_adult[[i]]=as.numeric(as.factor(data_adult[[i]]))
+}
+data_adult=tibble(data_adult)
+
+data_adult$ABOVE50K = data_adult$ABOVE50K-1
+```
+
+## find NA and remove then
+```{r}
+colSums(is.na(data_adult))
+```
+
+```{r}
+miss_value = which(is.na(data_adult$WORKCLASS)==1)
+data_adult = data_adult[-miss_value,]
+
+miss_value = which(is.na(data_adult$OCCUPATION)==1)
+data_adult = data_adult[-miss_value,]
+
+miss_value = which(is.na(data_adult$NATIVECOUNTRY)==1)
+data_adult = data_adult[-miss_value,]
+```
+
+# imbalance data
+```{r}
+data_adult%>%
+  ggplot(aes(x=ABOVE50K))+
+  geom_bar()+
+  geom_text(stat='count',aes(label=..count..),vjust=1.6,color="white", size=3.5)
+```
+
+# split train set and test set
+```{r}
+p=0.8
+index <- createDataPartition(data_adult$ABOVE50K, p = p, list = F)
+train <- data_adult[index, ]
+test <- data_adult[-index, ]
+```
+
+# logistic regression
+```{r}
+logistic_regression = glm(ABOVE50K~. ,data=train , family='binomial')
+summary(logistic_regression)
+logistic_predict=predict(logistic_regression, test[,-15])
+labels <- ifelse(logistic_predict > 0.5, 1, 0)
+cm=table('real'=test$ABOVE50K,'predict'=labels)
+err_metric(cm)
+confusionMatrix(reference = as.factor(test$ABOVE50K),data = as.factor(labels), mode='everything', positive='1')
+```
+# naiveBayes
+```{r}
+nb = naiveBayes(ABOVE50K ~ ., train)
+nb_predict=predict(nb, test[,-15])
+cm=table('real'=test$ABOVE50K,'predict'=nb_predict)
+err_metric(cm)
+```
+# Support Vector Machine
+```{r}
+model.svm <- svm(ABOVE50K ~., data = train, kernel = "linear",type='C-classification')
+summary(model.svm)
+svm_predict = predict(model.svm, test[,-15])
+cm=table('real'=test$ABOVE50K,'predict'=svm_predict)
+err_metric(cm)
+```
+# KNN
+```{r}
+knn = kknn(ABOVE50K ~ ., train, test, kernel = "rectangular", k = 10)
+cm = table('real'=test$ABOVE50K,'predict'=knn$fitted.values)
+err_metric(cm)
+```
+# Decision Tree
+```{r}
+model.dt <- rpart(ABOVE50K ~ .,train)
+plotcp(model.dt)
+model.dt <- rpart(ABOVE50K ~ .,train,cp=0.01)
+dt_predict = predict(model.dt, test[,-15])
+cm=table('real'=test$ABOVE50K,'predict'=dt_predict)
+err_metric(cm)
+```
+
+No matter what model is used , the f1-score is approximately 0.4 , but  Accuracy is approximately 0.8
+
+# Over Sampling
+improve the f1-score from 0.4 to 0.6 and the Accuracy not decline
+```{r}
+number_max = max(table(train$ABOVE50K))
+over <- ovun.sample(ABOVE50K~., data = train, method = "over" ,N =number_max*2)$data
+logistic_regression = glm(ABOVE50K~. ,data=over , family='binomial')
+summary(logistic_regression)
+logistic_predict=predict(logistic_regression, test[,-15])
+labels <- ifelse(logistic_predict > 0.5, 1, 0)
+cm=table('real'=test$ABOVE50K,'predict'=labels)
+err_metric(cm)
+```
+
+# Under Sampling
+have same effect
+```{r}
+number_min = min(table(train$ABOVE50K))
+under <- ovun.sample(ABOVE50K~., data=train, method = "under", N = number_min*2)$data
+logistic_regression = glm(ABOVE50K~. ,data=under , family='binomial')
+# summary(logistic_regression)
+logistic_predict=predict(logistic_regression, test[,-15])
+labels <- ifelse(logistic_predict > 0.5, 1, 0)
+cm=table('real'=test$ABOVE50K,'predict'=labels)
+err_metric(cm)
+```
+# Both
+```{r}
+average_number =  mean(table(train$ABOVE50K))
+both <- ovun.sample(ABOVE50K~., data=train, method = "both",
+                    p = 0.5,
+                    N = round(average_number))$data
+logistic_regression = glm(ABOVE50K~. ,data=both , family='binomial')
+# summary(logistic_regression)
+logistic_predict=predict(logistic_regression, test[,-15])
+labels <- ifelse(logistic_predict > 0.5, 1, 0)
+cm=table('real'=test$ABOVE50K,'predict'=labels)
+err_metric(cm)
+```
+# ROSE Function
+```{r}
+rose  = ROSE(ABOVE50K~., data = train, N = average_number)$data
+logistic_regression = glm(ABOVE50K~. ,data=rose , family='binomial')
+# summary(logistic_regression)
+logistic_predict=predict(logistic_regression, test[,-15])
+labels <- ifelse(logistic_predict > 0.5, 1, 0)
+cm=table('real'=test$ABOVE50K,'predict'=labels)
+err_metric(cm)
+```
+
+

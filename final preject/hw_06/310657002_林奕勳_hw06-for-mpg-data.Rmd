@@ -1,0 +1,232 @@
+---
+title: "310657002_林奕勳_hw05-for-mpg-data"
+output: html_document
+---
+
+```{r}
+library('tidyverse')
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(moments)
+library(viridis)
+library(caTools)
+library(rpart)
+library(rpart.plot) 
+library(glmnet)
+library(caret)
+```
+
+```{r}
+square_error = function(test_data,ture_data){
+  ans = sum((test_data-ture_data)**2)
+  return (ans)
+}
+```
+
+
+```{r}
+
+feature_name_mpg = c('mpg','cylinders','displacement','horsepower','weight','acceleration','model year','origin','car name')
+data_mpg = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\mpg\\auto-mpg.data",head=F,col.names=feature_name_mpg)
+data_mpg = data_mpg[1:8]
+
+str(data_mpg)
+
+# it is show that have 398 datas and 8 variables(mpg is label orthers is feature)
+dim(data_mpg)
+
+```
+
+## change type of data to numerice but probuct NA
+```{r}
+for (i in names(data_mpg)){
+  data_mpg[[i]]=as.numeric(data_mpg[[i]])
+}
+summary(data_mpg)
+```
+
+## find NA , and horsepower have 6 NA Missing value
+```{r}
+colSums(is.na(data_mpg))
+data_mpg[is.na(data_mpg$horsepower),]
+```
+
+## and remove missing value
+```{r}
+miss_value = which(is.na(data_mpg$horsepower)==1)
+data_mpg = data_mpg[-miss_value,]
+```
+
+find the displacement and weight have high association with mpg
+```{r}
+panel.cor=function(x,y,digits=2,prefix="",cex.cor=10,...)
+  {
+  usr=par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r=cor(x,y)
+  txt=format(c(r,0.123456789),digits=digits)[1]
+  txt=paste(prefix,txt,sep ="")
+  if(missing(cex.cor)) cex.cor=1/strwidth(txt)
+  text(0.5,0.5,txt,cex=cex.cor*abs(r))
+  } 
+pairs(data_mpg,lower.panel=panel.smooth,upper.panel=panel.cor)
+```
+
+split training data and testing data
+```{r}
+
+sample = sample.split(c(1:length(data_mpg$mpg)), SplitRatio = 0.75)
+train = subset(data_mpg, sample == TRUE)
+test  = subset(data_mpg, sample == FALSE)
+test['interaction'] = test[,'horsepower']*test['weight']
+train['interaction'] = train[,'horsepower']*train['weight']
+```
+
+
+by coefficient we take feature (displacement,horsepower,weight) to fit regression ,and plot QQ-plot (residual is normal distribution)and find they have linear (p-value < 0.5)
+```{r}
+regression_displacement = lm(mpg~displacement,data=train)
+regression_horsepower= lm(mpg~horsepower,data=train)
+regression_weight = lm(mpg~weight,data=train)
+summary(regression_displacement)
+qqnorm(regression_displacement$residuals)
+qqline(regression_displacement$residuals)
+
+summary(regression_horsepower)
+qqnorm(regression_horsepower$residuals)
+qqline(regression_horsepower$residuals)
+
+summary(regression_weight)
+qqnorm(regression_weight$residuals)
+qqline(regression_weight$residuals)
+```
+but when we combine they find that displacement is not linear (p-value > 0.05),since it have Multi-Collinearity with horsepower 
+```{r}
+regression =  lm(mpg~displacement+horsepower+weight,data=train)
+summary(regression)
+```
+
+so we remove displacement and fit regression again
+```{r}
+regression_final =  lm(mpg~horsepower+weight,data=train)
+summary(regression_final)
+qqnorm(regression_final$residuals)
+qqline(regression_final$residuals)
+```
+compare regression have displacement and no displacement MSE, have same value,so we remove displacement have no effect for regression
+```{r}
+regression_MSE = sum(regression$residuals**2)
+regression_final_MSE = sum(regression_final$residuals**2)
+cat('have displacement regression of MSE : ' ,regression_MSE,'\n',
+    'no displacement regression of MSE : ' ,regression_final_MSE)
+```
+
+compare regression have displacement and no displacement adjust R square ,have same conclusion
+```{r}
+cat('have displacement regression of adjust R square : ' ,summary(regression)$adj.r.squared,'\n',
+    'no displacement regression of adjust R square : ' ,summary(regression_final)$adj.r.squared)
+```
+and I try to fit interaction regression, and find that MSE are had reduce
+```{r}
+regression_final_interaction =  lm(mpg~horsepower+weight+horsepower*weight,data=train)
+cat('have interaction regression of MSE : ' ,sum(regression_final_interaction$residuals**2))
+qqnorm(regression_final_interaction$residuals)
+qqline(regression_final_interaction$residuals)
+```
+
+Use testing data calculate square error , compare have interaction and no interaction regression
+```{r}
+predict_from_regression = predict(regression_final,test[,c('horsepower','weight')])
+predict_from_interaction_regression = predict(regression_final_interaction,test[,c('horsepower','weight','interaction')])
+
+square_error_value = square_error(predict_from_regression,test[,'mpg'])
+cat(' regression square error : ',square_error_value)
+
+square_error_value=square_error(predict_from_interaction_regression,test[,'mpg'])
+cat('regression add interaction square error : ',square_error_value)
+```
+take log for mpg (label) , and fit regression add interaction term , calculate square error
+```{r}
+log_regression_interaction =  lm(log(mpg)~horsepower+weight+horsepower*weight,data=train)
+predict_from_interaction_log_regression=predict(log_regression_interaction,test[,c('horsepower','weight','interaction')])
+predict_from_interaction_log_regression = exp(predict_from_interaction_log_regression)
+square_error_value=square_error(predict_from_interaction_log_regression,test['mpg'])
+cat('log regression add interaction square error : ',square_error_value)
+```
+no any process for data , and fit regression for all data
+```{r}
+regression =  lm((mpg)~.,data=train[,-c(9)])
+predict_regression=predict(regression,test[,-c(1,9)])
+square_error_value=square_error(predict_regression,test['mpg'])
+cat(' regression square error : ',square_error_value)
+summary(regression)
+```
+
+# final linear regression and cross-validation
+
+add interaction term and remove p-value > 0.05
+```{r}
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+model <- train((mpg)~horsepower+weight+model.year+origin+interaction, data = train, method = "lm",
+               trControl = train.control)
+# Summarize the results
+print(model)
+
+predict_model=predict(model,test[,c('horsepower','weight','model.year','origin','interaction')])
+square_error_value=square_error(predict_model,test['mpg'])
+cat(' regression square error : ',square_error_value)
+```
+
+## Regression Trees
+```{r}
+regTree = rpart((mpg)~horsepower+weight,data=train,method = "anova")
+regTree
+```
+```{r}
+prp(regTree, digits=6)
+plotcp(regTree)
+```
+
+
+
+```{r}
+regTree_pruned = prune(regTree, cp=0.034)
+prp(regTree_pruned, digits=6)
+```
+
+```{r}
+predict_regression_tree=predict(regTree_pruned,test[,c('horsepower','weight')])
+square_error_value=square_error(predict_regression_tree,test[,'mpg'])
+cat('regression tree square error : ',square_error_value)
+```
+
+# Ridge regression
+```{r}
+ridge_reg  = glmnet(x=as.matrix(train[,2:9]),y=as.matrix(train[,'mpg']), alpha = 0,lambda=seq(0, 1, by = 0.02))
+
+cv_ridge_reg=cv.glmnet(as.matrix(train[,2:9]), as.matrix(train[,'mpg']), alpha = 0.44, lambda = seq(0, 1, by = 0.02))
+
+plot(cv_ridge_reg)
+
+opt_lambda <- cv_ridge_reg$lambda.min
+
+cv_ridge_reg = cv_ridge_reg$glmnet.fit
+
+predict_ridge_reg = predict(cv_ridge_reg, s = opt_lambda, newx = as.matrix(test[,-c(1)]))
+
+square_error_value=square_error(predict_ridge_reg,test['mpg'])
+cat(' regression square error : ',square_error_value)
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,76 @@
+---
+title: "data science hw01 for adult data"
+output: html_document
+---
+## 讀取資料，確認資料型態，得出32561筆資料，15個變數(ABOVE50K is label and others are feature)
+```{r setup}
+library('tidyverse')
+library('ggplot2')
+feature_name_adult = c('AGE','WORKCLASS','FNLWGT','EDUCATION','EDUCATIONNUM','MARITALSTATUS','OCCUPATION','RELATIONSHIP','RACE','SEX','CAPITALGAIN','CAPITALLOSS','HOURSPERWEEK','NATIVECOUNTRY','ABOVE50K')
+data_adult = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\adult\\adult.data",head=F,sep = ",",col.names=feature_name_adult)
+class_variable_adult = c('WORKCLASS','EDUCATION','MARITALSTATUS','OCCUPATION','RELATIONSHIP','RACE','SEX','NATIVECOUNTRY','ABOVE50K')
+
+str(data_adult)
+
+
+```
+
+since this data miss value is use '?' express ,so we use NA replace '?'
+```{r}
+for (i in feature_name_adult){
+    if (sum(data_adult[[i]] == ' ?')>0){
+      data_adult[data_adult[[i]] == ' ?',][[i]] =NA
+  }
+}
+
+```
+
+## 將類別資料轉成numeric型態，並從Dataframe 轉成 tibble
+```{r}
+for (i in class_variable_adult){
+  data_adult[[i]]=as.numeric(as.factor(data_adult[[i]]))
+}
+data_adult=tibble(data_adult)
+```
+
+## find NA and remove then
+```{r}
+colSums(is.na(data_adult))
+```
+
+```{r}
+miss_value = which(is.na(data_adult$WORKCLASS)==1)
+data_adult = data_adult[-miss_value,]
+
+miss_value = which(is.na(data_adult$OCCUPATION)==1)
+data_adult = data_adult[-miss_value,]
+
+miss_value = which(is.na(data_adult$NATIVECOUNTRY)==1)
+data_adult = data_adult[-miss_value,]
+```
+
+## 在圖當中可以明顯發現，資料有所區隔(藍色點多數在右邊，紅色點多數在左邊)
+```{r}
+data_adult%>%
+  ggplot(aes(x=CAPITALGAIN,y=EDUCATION,col=as.factor(ABOVE50K)))+
+  geom_point()
+```
+
+
+## 圖中明顯看出紅色在(1，5，6，7)在多數，藍色在3占多數
+```{r}
+data_adult%>%
+  ggplot(aes(MARITALSTATUS,group=ABOVE50K,fill=as.factor(ABOVE50K),col=as.factor(ABOVE50K)))+
+  geom_bar(position = "identity",alpha = 0.5)
+```
+
+## imbalance data
+```{r}
+data_adult%>%
+  ggplot(aes(x=ABOVE50K))+
+  geom_bar()+
+  geom_text(stat='count',aes(label=..count..),vjust=1.6,color="white", size=3.5)
+```
+
+## possible problems : Our aim is identify whether income exceeds $50K/y . but we need preprocessing for data . sincce data have massing value and Qualitative data. In addition this data is an imbalance data . we can find important feature ( feature selection like lasso regression ) . next find a proper model to predict income (like logistic regression). According to the customer's financial ability, we can choose products that are more suitable for customers(e.g advertisement . insurance)
+

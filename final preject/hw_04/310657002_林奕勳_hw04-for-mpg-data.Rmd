@@ -1,0 +1,207 @@
+---
+title: "310657002_林奕勳_hw04-for-mpg-data"
+output: html_document
+---
+
+```{r}
+library('tidyverse')
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(moments)
+library(viridis)
+```
+
+Code coming from  https://www.data-to-viz.com/caveat/boxplot.html
+```{r}
+library(gghalves)
+
+
+"%||%" <- function(a, b) {
+  if (!is.null(a)) a else b
+}
+
+geom_flat_violin <- function(mapping = NULL, data = NULL, stat = "ydensity",
+                        position = "dodge", trim = TRUE, scale = "area",
+                        show.legend = NA, inherit.aes = TRUE, ...) {
+  layer(
+    data = data,
+    mapping = mapping,
+    stat = stat,
+    geom = GeomFlatViolin,
+    position = position,
+    show.legend = show.legend,
+    inherit.aes = inherit.aes,
+    params = list(
+      trim = trim,
+      scale = scale,
+      ...
+    )
+  )
+}
+
+#' @rdname ggplot2-ggproto
+#' @format NULL
+#' @usage NULL
+#' @export
+GeomFlatViolin <-
+  ggproto("GeomFlatViolin", Geom,
+          setup_data = function(data, params) {
+            data$width <- data$width %||%
+              params$width %||% (resolution(data$x, FALSE) * 0.9)
+
+            # ymin, ymax, xmin, and xmax define the bounding rectangle for each group
+            data %>%
+              group_by(group) %>%
+              mutate(ymin = min(y),
+                     ymax = max(y),
+                     xmin = x,
+                     xmax = x + width / 2)
+
+          },
+
+          draw_group = function(data, panel_scales, coord) {
+            # Find the points for the line to go all the way around
+            data <- transform(data, xminv = x,
+                              xmaxv = x + violinwidth * (xmax - x))
+
+            # Make sure it's sorted properly to draw the outline
+            newdata <- rbind(plyr::arrange(transform(data, x = xminv), y),
+                             plyr::arrange(transform(data, x = xmaxv), -y))
+
+            # Close the polygon: set first and last point the same
+            # Needed for coord_polar and such
+            newdata <- rbind(newdata, newdata[1,])
+
+            ggplot2:::ggname("geom_flat_violin", GeomPolygon$draw_panel(newdata, panel_scales, coord))
+          },
+
+          draw_key = draw_key_polygon,
+
+          default_aes = aes(weight = 1, colour = "grey20", fill = "white", size = 0.5,
+                            alpha = NA, linetype = "solid"),
+
+          required_aes = c("x", "y")
+)
+```
+
+```{r}
+
+feature_name_mpg = c('mpg','cylinders','displacement','horsepower','weight','acceleration','model year','origin','car name')
+data_mpg = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\mpg\\auto-mpg.data",head=F,col.names=feature_name_mpg)
+data_mpg = data_mpg[1:8]
+
+str(data_mpg)
+
+# it is show that have 398 datas and 8 variables(mpg is label orthers is feature)
+dim(data_mpg)
+
+```
+
+## change type of data to numerice but probuct NA
+```{r}
+for (i in names(data_mpg)){
+  data_mpg[[i]]=as.numeric(data_mpg[[i]])
+}
+```
+
+## find NA , and horsepower have 6 NA Missing value
+```{r}
+colSums(is.na(data_mpg))
+data_mpg[is.na(data_mpg$horsepower),]
+```
+
+## and remove missing value
+```{r}
+miss_value = which(is.na(data_mpg$horsepower)==1)
+data_mpg = data_mpg[-miss_value,]
+```
+
+find the displacement and weight have high association with mpg
+```{r}
+pairs(data_mpg)
+```
+
+check distribution for mpg , and find that it is positive skew (i.e skew to right)
+```{r}
+data_mpg%>%
+  ggplot(aes(mpg))+
+  geom_histogram(aes(y=..density..),col='black',fill='black',alpha=0.2)+
+  geom_density(alpha=0.2,fill='red')
+```
+mpg boxplot group by cylinders,and find that cylinders=8 have different others
+```{r}
+data_mpg%>%
+  ggplot(aes(cylinders,mpg ,color =as.factor(data_mpg$cylinders) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+mpg boxplot group by origin,and find that have different weather mediat or average
+```{r}
+data_mpg%>%
+  ggplot(aes(origin,mpg ,color =as.factor(data_mpg$origin) ))+
+  geom_boxplot()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+violin for boxplot
+```{r}
+data_mpg%>%
+  ggplot(aes(origin,mpg ,color =as.factor(data_mpg$origin) ))+
+  geom_violin()+
+  stat_summary(fun.y=mean, geom="point", shape=5, size= 3)
+```
+histogram and density for mpg group by origin ,and find skew and distribution are different
+```{r}
+data_mpg[['origin']]=as.character(data_mpg[['origin']])
+ggplot(data_mpg,aes(x=mpg,group=origin,col=origin,fill=origin))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+```
+kurtosis are different
+```{r}
+data_mpg[['cylinders']]=as.character(data_mpg[['cylinders']])
+ggplot(data_mpg,aes(x=mpg,group=cylinders,color=cylinders,fill=cylinders))+
+  geom_histogram(aes(y=..density..),alpha=0.2,position="identity")+
+  geom_density(alpha=0.2)
+```
+from pairs plot find displacement have high association for mpg , thus plot boxplot , histogram and density ,
+```{r}
+layout(mat = matrix(c(1,2), byrow=TRUE),height = c(1,4))
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(data_mpg$displacement , horizontal=TRUE , xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
+points(mean(data_mpg$displacement),1,col='red')
+par(mar=c(0, 3.1, 1.1, 2.1))
+hist(data_mpg$displacement , breaks=40 ,prob = TRUE, col=rgb(0.2,0.8,0.5,0.5) , border=T,main='')
+lines(density(data_mpg$displacement))
+```
+
+
+like previously plot
+```{r}
+data_mpg%>%
+  ggplot(aes(1,displacement,fill='red'))+
+  geom_flat_violin()+
+  geom_dotplot(binaxis = "y", dotsize = 25, stackdir = "down", binwidth = 0.3, position = position_nudge(-0.025))
+```
+improve boxplot and we can compare previously boxplot , it is same distribution and consiquence
+```{r}
+data_mpg%>%
+  ggplot(aes(x=origin,y=mpg,group=origin,fill=origin))+
+    geom_flat_violin(scale = "count", trim = FALSE, width=2) + 
+    geom_dotplot(binaxis = "y", dotsize = 15, stackdir = "down", binwidth = 0.05, position = position_nudge(x=-0.025)) 
+```
+
+
+```{r}
+
+data_mpg%>%
+  ggplot(aes(x=as.factor(data_mpg$cylinders),y=mpg,fill=as.factor(data_mpg$cylinders)))+
+  geom_flat_violin(scale = "count", trim = FALSE,position = position_nudge(x=.1))+
+  geom_dotplot(binaxis = "y", dotsize = 15, stackdir = "down", binwidth = 0.05, position = position_nudge(-0.025))
+```
+
+
+
+
+
+

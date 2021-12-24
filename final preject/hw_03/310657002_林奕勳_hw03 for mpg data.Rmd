@@ -1,0 +1,124 @@
+---
+title: "data science hw01 for mpg data"
+output: html_document
+---
+# Homework 2
+
+## read data and confirm data type , we can see that 'horsepower' althought is numerice but type is character , data have 398 observes and 8 variables(mpg is our label so have 7 features)
+```{r}
+library('tidyverse')
+library('ggplot2')
+library(boot)
+feature_name_mpg = c('mpg','cylinders','displacement','horsepower','weight','acceleration','model year','origin','car name')
+data_mpg = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\mpg\\auto-mpg.data",head=F,col.names=feature_name_mpg)
+data_mpg = data_mpg[1:8]
+
+str(data_mpg)
+```
+## change type of data to numerice but probuct NA
+```{r}
+for (i in names(data_mpg)){
+  data_mpg[[i]]=as.numeric(data_mpg[[i]])
+}
+```
+
+## find NA , and horsepower have 6 NA Missing value
+```{r}
+colSums(is.na(data_mpg))
+data_mpg[is.na(data_mpg$horsepower),]
+```
+
+## and remove missing value
+```{r}
+miss_value = which(is.na(data_mpg$horsepower)==1)
+data_mpg_remove_miss = data_mpg[-miss_value,]
+```
+
+## confirm data 
+```{r}
+str(data_mpg_remove_miss)
+```
+
+## drawing matrix of scatter plot and find displacement ,horsepower and weight have patten with mpg
+```{r}
+pairs(mpg~., data_mpg_remove_miss)
+```
+
+## cylinders and origin is discrete data so drawing box-plots with mpg , and find medians are opposite
+```{r}
+par(mfrow=c(1,2))
+boxplot(mpg  ~ cylinders, data = data_mpg_remove_miss)
+boxplot(mpg  ~ origin , data = data_mpg_remove_miss)
+```
+
+```{r}
+
+data_mpg_remove_miss[['origin']]=as.character(data_mpg_remove_miss[['origin']])
+ggplot(data_mpg_remove_miss,aes(x=mpg,group=origin,color=origin))+
+  geom_histogram(binwidth=2,fill="white",position="identity")
+
+data_mpg_remove_miss[['cylinders']]=as.character(data_mpg_remove_miss[['cylinders']])
+ggplot(data_mpg_remove_miss,aes(x=mpg,group=cylinders,color=cylinders))+
+  geom_histogram(binwidth=2,fill="white",position="identity")
+```
+
+# Homework 3
+
+by homework 2
+
+# first method        
+we can use average of horsepower to instead missing value on horsepower
+
+and feature horsepower mean is 104.4694 ,Confidence interval is (100.6472,108.2916)  for mean at $\alpha$ =0.05
+```{r}
+t.test(data_mpg_remove_miss$horsepower,conf.level = 0.95)
+```
+
+```{r}
+data_mpg_mean = data_mpg
+data_mpg_mean[miss_value,]$horsepower=mean(data_mpg_remove_miss$horsepower)
+colSums(is.na(data_mpg_mean))
+```
+
+```{r}
+data_mpg_mean[miss_value,]
+```
+# second method
+we also can use median of horsepower to instead missing value on horsepower          
+
+
+```{r}
+bootMedian <- function(data, indices) median(data[indices])
+median_of_horsepower <- boot(data_mpg_remove_miss$horsepower, bootMedian, R = 1000)
+
+mean(median_of_horsepower$t)
+sd(median_of_horsepower$t)
+```
+
+```{r}
+data_mpg_median = data_mpg
+data_mpg_median[miss_value,]$horsepower=mean(median_of_horsepower$t)
+colSums(is.na(data_mpg_median))
+```
+
+```{r}
+data_mpg_median[miss_value,]
+```
+
+# third method
+on plot we can see that horsepower have high Multicollinearity with displacement and weight , so I try fit a linear regression to predict NA , can see that p-value of displacement  and weight is smaller than $\alpha$ =0.05 , so  horsepower have linear association with  displacement and weight
+```{r}
+horsepower_regression = lm(horsepower~displacement+weight ,data=data_mpg_remove_miss)
+horsepower_predict = predict(horsepower_regression,data_mpg[miss_value,][,c(3,5)])
+summary(horsepower_regression)
+```
+
+```{r}
+data_mpg_predict = data_mpg
+data_mpg_predict[miss_value,]$horsepower  = horsepower_predict
+```
+
+```{r}
+data_mpg_predict[miss_value,]
+```
+

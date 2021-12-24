@@ -1,0 +1,63 @@
+---
+title: "data science hw01 for mpg data"
+output: html_document
+---
+
+## read data and confirm data type , we can see that 'horsepower' althought is numerice but type is character , data have 398 observes and 8 variables(mpg is our label so have 7 features)
+```{r}
+library('tidyverse')
+library('ggplot2')
+feature_name_mpg = c('mpg','cylinders','displacement','horsepower','weight','acceleration','model year','origin','car name')
+data_mpg = read.table("C:\\Users\\xx958\\OneDrive\\桌面\\nycu 碩一_上\\數據科學\\mpg\\auto-mpg.data",head=F,col.names=feature_name_mpg)
+data_mpg = data_mpg[1:8]
+
+str(data_mpg)
+```
+## change type of data to numerice but probuct NA
+```{r}
+for (i in names(data_mpg)){
+  data_mpg[[i]]=as.numeric(data_mpg[[i]])
+}
+```
+
+## find NA , and horsepower have 6 NA Missing value
+```{r}
+colSums(is.na(data_mpg))
+data_mpg[is.na(data_mpg$horsepower),]
+```
+
+## and remove missing value
+```{r}
+miss_value = which(is.na(data_mpg$horsepower)==1)
+data_mpg = data_mpg[-miss_value,]
+```
+
+## confirm data 
+```{r}
+str(data_mpg)
+```
+
+## drawing matrix of scatter plot and find displacement ,horsepower and weight have patten with mpg
+```{r}
+pairs(mpg~., data_mpg)
+```
+
+## cylinders and origin is discrete data so drawing box-plots with mpg , and find medians are opposite
+```{r}
+par(mfrow=c(1,2))
+boxplot(mpg  ~ cylinders, data = data_mpg)
+boxplot(mpg  ~ origin , data = data_mpg)
+```
+
+```{r}
+
+data_mpg[['origin']]=as.character(data_mpg[['origin']])
+ggplot(data_mpg,aes(x=mpg,group=origin,color=origin))+
+  geom_histogram(binwidth=2,fill="white",position="identity")
+
+data_mpg[['cylinders']]=as.character(data_mpg[['cylinders']])
+ggplot(data_mpg,aes(x=mpg,group=cylinders,color=cylinders))+
+  geom_histogram(binwidth=2,fill="white",position="identity")
+```
+
+## possible problems : we also need to preprocessing for data , althought i remove Na data,but have others method to rpocess Na data(like use mean or median value instead or use logistic regression knn to predict), and we can try to find main influence variables associate with fuel consumption(feature selection) , it can help us refinement car in the future .
